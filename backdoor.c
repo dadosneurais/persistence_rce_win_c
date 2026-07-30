@@ -98,7 +98,7 @@ void send_file(const char *filename) {
     file = fopen(filename, "rb");
     if (file == NULL) {
         char response[1024];
-        snprintf(response, sizeof(response), "Erro: Nao foi possivel abrir o arquivo '%s'\n", filename);
+        snprintf(response, sizeof(response), "Erro: file not found '%s'\n", filename);
         send(sock, response, strlen(response), 0);
         return;
     }
